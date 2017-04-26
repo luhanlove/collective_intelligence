@@ -8,6 +8,7 @@ Chapter6 Naive Bayes
 
 import re
 import math
+import sqlite3 as sqlite
 
 def sampletrain(c1):
     #简单的训练样本
@@ -32,43 +33,64 @@ class classifier:
         #统计特征/分类组合的数量
         #各分类中不同特征的数量
         #{'python':{'bad':0,'good':0},'the':{'bad':3,'good':0}}
-        self.fc = {}
+        #self.fc = {}
         #统计每个分类中的文档数量
-        self.cc = {}
+        #self.cc = {}
         #对应一个函数：从即将被归类的内容项提取特征
         self.getfeatures = getfeatures
-        
+    def setdb(self,dbfile):
+        self.con = sqlite.connect(dbfile)
+        #替换fc，cc字典
+        self.con.execute("create table if not exists fc(feature text,category text,count int);")
+        self.con.execute("create table if not exists cc(category text,count int);")  
+        print "Table created succesfully"
         
     def incf(self,f,cat):
         #增加对特征/分类组合的计数值
-        self.fc.setdefault(f,{})
-        self.fc[f].setdefault(cat,0)
-        self.fc[f][cat] += 1
-               
+        count = self.fcount(f,cat)
+        if count == 0:
+            self.con.execute("insert into fc values ('%s','%s',1)" % (f,cat))
+        else:
+            self.con.execute("update fc set count=%d where feature='%s' and category='%s'"
+                             %(count+1,f,cat))
+             
     def incc(self,cat):
         #增加对某一分类的计数值
-        self.cc.setdefault(cat,0)
-        self.cc[cat] += 1
+        count = self.catcount(cat)
+        if count==0:
+            self.con.execute("insert into cc values ('%s',1)"
+                             %(cat))
+        else:
+            self.con.execute("update cc set count=%d where category='%s'"
+                             %(count+1,cat))
     
     def fcount(self,f,cat):
         #某一特征出现于某一分类的次数
-        if f in self.fc and cat in self.fc[f]:
-            return float(self.fc[f][cat])
-        return 0.0
+        res=self.con.execute('select count from fc where feature="%s" and category="%s"'
+                             %(f,cat)).fetchone()
+        if res == None: return 0
+        else: return float(res[0])
     
     def catcount(self,cat):
         #属于某一分类的内容项数量
-        if cat in self.cc:
-            return float(self.cc[cat])
-        return 0
+        res = self.con.execute('select count from cc where category="%s"'
+                               %(cat)).fetchone()
+        if res==None: 
+            return 0
+        else:
+            return float(res[0])
     
     def totalcount(self):
         #所有内容项数量
-        return sum(self.cc.values())
+        res = self.con.execute('select sum(count) from cc').fetchone();
+        if res==None:
+            return 0
+        return res[0]
     
     def categories(self):
         #所有分类列表
-        return self.cc.keys()
+        cur = self.con.execute('select category from cc')
+        return [d[0] for d in cur]
     
     def train(self,item,cat):
         #item:内容项（文档）；cat:分类
@@ -79,6 +101,10 @@ class classifier:
         
         #增加针对该分类的计数值
         self.incc(cat)
+        self.con.commit()
+        
+    def close(self):
+        self.con.close()
         
     def fprob(self,f,cat):
         if self.catcount(cat) == 0:
