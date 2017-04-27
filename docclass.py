@@ -3,6 +3,7 @@
 Created on Mon Apr 24 17:03:42 2017
 @author: lenovo
 F:/HeadFirst/Naive Bayes/docclass.py
+文档过滤
 Chapter6 Naive Bayes
 """
 
